@@ -16,12 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>top.kzre</groupId>
-            <artifactId>krro-brush</artifactId>
-            <version>0.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>top.kzre</groupId>
-            <artifactId>krro-color</artifactId>
+            <artifactId>krro-core</artifactId>
             <version>0.1.0</version>
         </dependency>
     </dependencies>
