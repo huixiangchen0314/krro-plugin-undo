@@ -7,8 +7,6 @@
    [top.kzre.krro.plugin.undo.internal.impl :as impl]
    [top.kzre.krro.plugin.undo.internal.protocol :as proto]))
 
-(defn- user-data [project]
-  (reduce dissoc project @proj/protected-keys))
 
 (defn- restore-state [project current-node]
   (let [protected (select-keys project @proj/protected-keys)]
@@ -32,8 +30,8 @@
 
 (defn- record-state-handler [project]
   (let [current (or (:krro/undo project)
-                    (impl/make-undo-tree (user-data project)))]
-    (assoc project :krro/undo (proto/add-state! current (user-data project) {:command :manual}))))
+                    (impl/make-undo-tree (proj/user-data project)))]
+    (assoc project :krro/undo (proto/add-state! current (proj/user-data project) {:command :manual}))))
 
 (defn- branch-options []
   (when-let [current (:krro/undo @proj/project)]
@@ -63,7 +61,7 @@
     (fn [p]
       (if (:krro/undo p)
         p
-        (assoc p :krro/undo (impl/make-undo-tree (user-data p))))))
+        (assoc p :krro/undo (impl/make-undo-tree (proj/user-data p))))))
   (cmd/register-command! :krro.command/undo undo-handler :description "Undo last change")
   (cmd/register-command! :krro.command/redo redo-handler :description "Redo last undone change")
   (cmd/register-command! :krro.command/record-state record-state-handler :description "Save current state to undo tree")
