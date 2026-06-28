@@ -15,6 +15,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.clojure</groupId>
+            <artifactId>clojure</artifactId>
+            <version>1.11.1</version>
+        </dependency>
+        <dependency>
             <groupId>top.kzre</groupId>
             <artifactId>krro-core</artifactId>
             <version>0.1.0</version>
