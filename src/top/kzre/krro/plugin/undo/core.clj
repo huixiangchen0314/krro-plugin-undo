@@ -1,47 +1,69 @@
+;; ── 修改 undo.core ──
 (ns top.kzre.krro.plugin.undo.core
-  "Undo 插件注册入口。"
+  "Undo 插件注册入口，集成 hook 通知。"
   (:require
-   [top.kzre.krro.core.command :as cmd]
-   [top.kzre.krro.core.plugin :as plugin]
-   [top.kzre.krro.core.project :as proj]
-   [top.kzre.krro.plugin.undo.internal.impl :as impl]
-   [top.kzre.krro.plugin.undo.internal.protocol :as proto]))
+    [top.kzre.krro.core.command :as cmd]
+    [top.kzre.krro.core.hook :as hook]
+    [top.kzre.krro.core.plugin :as plugin]
+    [top.kzre.krro.core.project :as proj]
+    [top.kzre.krro.plugin.undo.internal.project :as undo-proj]
+    [top.kzre.krro.plugin.undo.internal.impl :as impl]
+    [top.kzre.krro.plugin.undo.internal.protocol :as proto]))
 
 
+;; ═══════════════════════════════════════════
+;; 内部辅助
+;; ═══════════════════════════════════════════
 (defn- restore-state [project current-node]
   (let [protected (select-keys project @proj/protected-keys)]
-    (merge (:state current-node) protected {:krro/undo current-node})))
+    (merge (:state current-node) protected {:krro.undo/undo-tree current-node})))
 
+;; ═══════════════════════════════════════════
+;; 命令处理
+;; ═══════════════════════════════════════════
 (defn- undo-handler [project]
-  (if-let [current (:krro/undo project)]
+  (if-let [current (:krro.undo/undo-tree project)]
     (let [new-current (proto/undo! current)]
       (if (identical? new-current current)
         project
-        (restore-state project new-current)))
+        (let [new-project (restore-state project new-current)]
+          (hook/run-hook :krro.undo/undo-hook
+                          {:old-project project
+                           :new-project new-project
+                           :old-node current
+                           :new-node new-current})
+          new-project)))
     project))
 
 (defn- redo-handler [project]
-  (if-let [current (:krro/undo project)]
+  (if-let [current (:krro.undo/undo-tree project)]
     (let [new-current (proto/redo! current)]
       (if (identical? new-current current)
         project
-        (restore-state project new-current)))
+        (let [new-project (restore-state project new-current)]
+          (hook/run-hook :krro.undo/redo-hook
+                          {:old-project project
+                           :new-project new-project
+                           :old-node current
+                           :new-node new-current})
+          new-project)))
     project))
 
+
 (defn- record-state-handler [project]
-  (let [current (or (:krro/undo project)
+  (let [current (or (:krro.undo/undo-tree project)
                     (impl/make-undo-tree (proj/user-data project)))]
-    (assoc project :krro/undo (proto/add-state! current (proj/user-data project) {:command :manual}))))
+    (assoc project :krro.undo/undo-tree (proto/add-state! current (proj/user-data project) {:command :manual}))))
 
 (defn- branch-options []
-  (when-let [current (:krro/undo @proj/project)]
+  (when-let [current (:krro.undo/undo-tree @proj/project)]
     (let [children (proto/branches current)]
       (map-indexed (fn [idx child]
                      (str "Branch " idx ": " (pr-str (:state child))))
                    children))))
 
 (defn- switch-branch-handler [project choice]
-  (if-let [current (:krro/undo project)]
+  (if-let [current (:krro.undo/undo-tree project)]
     (let [children (proto/branches current)
           idx (if (number? choice)
                 choice
@@ -55,17 +77,15 @@
         project))
     project))
 
+;; ═══════════════════════════════════════════
+;; 插件初始化
+;; ═══════════════════════════════════════════
 (defn init []
-  (proj/register-protected-key! :krro/undo)
-  (proj/update-project!
-    (fn [p]
-      (if (:krro/undo p)
-        p
-        (assoc p :krro/undo (impl/make-undo-tree (proj/user-data p))))))
-  (cmd/register-command! :krro.command/undo undo-handler :description "Undo last change")
-  (cmd/register-command! :krro.command/redo redo-handler :description "Redo last undone change")
-  (cmd/register-command! :krro.command/record-state record-state-handler :description "Save current state to undo tree")
-  (cmd/register-command! :krro.command/undo-switch-branch switch-branch-handler
+  (undo-proj/polyfill-undo-tree)
+  (cmd/register-command! :krro.undo/undo undo-handler :description "Undo last change")
+  (cmd/register-command! :krro.undo/redo redo-handler :description "Redo last undone change")
+  (cmd/register-command! :krro.undo/record-state record-state-handler :description "Save current state to undo tree")
+  (cmd/register-command! :krro.undo/undo-switch-branch switch-branch-handler
                          :description "Switch to a different undo branch"
                          :interactive [[:choice branch-options]]))
 
