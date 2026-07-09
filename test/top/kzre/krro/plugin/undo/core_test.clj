@@ -21,7 +21,7 @@
 
 (deftest test-undo-plugin-init
          (let [node (:krro/undo @proj/project)]
-              (is (satisfies? proto/IUndoTree node))
+              (is (satisfies? proto/IUndoNode node))
               (is (nil? (:parent node)))
               (is (empty? (:children node)))))
 

@@ -2,13 +2,26 @@
 (ns top.kzre.krro.plugin.undo.core
   "Undo 插件注册入口，集成 hook 通知。"
   (:require
-    [top.kzre.krro.core.command :as cmd]
-    [top.kzre.krro.core.hook :as hook]
-    [top.kzre.krro.core.plugin :as plugin]
-    [top.kzre.krro.core.project :as proj]
-    [top.kzre.krro.plugin.undo.internal.project :as undo-proj]
-    [top.kzre.krro.plugin.undo.internal.impl :as impl]
-    [top.kzre.krro.plugin.undo.internal.protocol :as proto]))
+   [top.kzre.krro.core.command :as cmd]
+   [top.kzre.krro.core.core :refer [defminor]]
+   [top.kzre.krro.core.hook :as hook]
+   [top.kzre.krro.core.keymap :as km]
+   [top.kzre.krro.core.plugin :as plugin]
+   [top.kzre.krro.core.project :as proj]
+   [top.kzre.krro.plugin.undo.internal.impl :as impl]
+   [top.kzre.krro.plugin.undo.internal.project :as undo-proj]
+   [top.kzre.krro.plugin.undo.protocol :as proto]))
+
+;; 手动操作api
+
+(defn record-state [metadata]
+  (swap! proj/project
+         (fn [project]
+           (let [current (or (:krro.undo/undo-tree project)
+                             (impl/make-undo-tree (proj/user-data project)))]
+             (assoc project :krro.undo/undo-tree
+                            (proto/add-state! current (proj/user-data project) metadata))))))
+
 
 
 ;; ═══════════════════════════════════════════
@@ -23,11 +36,12 @@
 ;; ═══════════════════════════════════════════
 (defn- undo-handler [project]
   (if-let [current (:krro.undo/undo-tree project)]
-    (let [new-current (proto/undo! current)]
+    (let [new-current (proto/undo current)]
       (if (identical? new-current current)
         project
         (let [new-project (restore-state project new-current)]
-          (hook/run-hook :krro.undo/undo-hook
+          (swap! proj/project (constantly new-project))
+          (hook/run-hook! :krro.undo/undo-hook
                           {:old-project project
                            :new-project new-project
                            :old-node current
@@ -37,11 +51,12 @@
 
 (defn- redo-handler [project]
   (if-let [current (:krro.undo/undo-tree project)]
-    (let [new-current (proto/redo! current)]
+    (let [new-current (proto/redo current)]
       (if (identical? new-current current)
         project
         (let [new-project (restore-state project new-current)]
-          (hook/run-hook :krro.undo/redo-hook
+          (swap! proj/project (constantly new-project))
+          (hook/run-hook! :krro.undo/redo-hook
                           {:old-project project
                            :new-project new-project
                            :old-node current
@@ -54,6 +69,8 @@
   (let [current (or (:krro.undo/undo-tree project)
                     (impl/make-undo-tree (proj/user-data project)))]
     (assoc project :krro.undo/undo-tree (proto/add-state! current (proj/user-data project) {:command :manual}))))
+
+
 
 (defn- branch-options []
   (when-let [current (:krro.undo/undo-tree @proj/project)]
@@ -70,12 +87,14 @@
                 (some (fn [[i c]] (when (= (str "Branch " i ": " (pr-str (:state c))) choice) i))
                       (map-indexed vector children)))]
       (if (and idx (<= 0 idx (dec (count children))))
-        (let [new-current (proto/switch-branch! current idx)]
+        (let [new-current (proto/switch-branch current idx)]
           (if (identical? new-current current)
             project
             (restore-state project new-current)))
         project))
     project))
+
+
 
 ;; ═══════════════════════════════════════════
 ;; 插件初始化
@@ -87,6 +106,10 @@
   (cmd/register-command! :krro.undo/record-state record-state-handler :description "Save current state to undo tree")
   (cmd/register-command! :krro.undo/undo-switch-branch switch-branch-handler
                          :description "Switch to a different undo branch"
-                         :interactive [[:choice branch-options]]))
-
+                         :interactive [[:choice branch-options]])
+  )
+(defminor :krro.undo/undo-tree "Undo Tree"
+          :keymap {:u :krro.undo/undo
+                   :r :krro.undo/redo
+                   })
 (plugin/register-plugin! {:name :krro.plugin/undo :init init})
