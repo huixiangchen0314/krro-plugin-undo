@@ -15,7 +15,7 @@
 ;; 手动操作api
 
 (defn record-state!
-  ([] (record-state!))
+  ([] (record-state! nil))
   ([metadata]
    (swap! proj/project
           (fn [project]
