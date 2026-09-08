@@ -2,10 +2,8 @@
 (ns top.kzre.krro.plugin.undo.core
   "Undo 插件注册入口，集成 hook 通知。"
   (:require
-    [top.kzre.krro.core.command :as cmd]
-    [top.kzre.krro.core.core :refer [defminor]]
+    [top.kzre.krro.core.core :as krro ]
     [top.kzre.krro.core.hook :as hook]
-    [top.kzre.krro.core.plugin :as plugin]
     [top.kzre.krro.core.project :as proj]
     [top.kzre.krro.core.resource :as res]
     [top.kzre.krro.plugin.undo.internal.impl :as impl]
@@ -96,19 +94,21 @@
         project))
     project))
 
-
-(defn init []
-
-  (undo-proj/polyfill-undo-tree)
-  (cmd/register-command! :krro.undo/undo undo-handler :description "Undo last change")
-  (cmd/register-command! :krro.undo/redo redo-handler :description "Redo last undone change")
-  (cmd/register-command! :krro.undo/record-state record-state-handler :description "Save current state to undo tree")
-  (cmd/register-command! :krro.undo/undo-switch-branch switch-branch-handler
-                         :description "Switch to a different undo branch"
-                         :interactive [[:choice branch-options]])
-  (defminor :krro.undo/undo-tree "Undo Tree"
-            :keymap {:u :krro.undo/undo
-                     :r :krro.undo/redo
-                     }))
-
-(plugin/register-plugin! {:name :krro.plugin/undo :init init})
+(krro/reg-plugin!
+  {:name :krro.plugin/undo
+   :mount
+   (fn []
+     (undo-proj/polyfill-undo-tree)
+     (krro/reg-command :krro.undo/undo undo-handler :description "Undo last change")
+     (krro/reg-command :krro.undo/redo redo-handler :description "Redo last undone change")
+     (krro/reg-command :krro.undo/record-state record-state-handler :description "Save current state to undo tree")
+     (krro/reg-command :krro.undo/undo-switch-branch switch-branch-handler
+                            :description "Switch to a different undo branch"
+                            :interactive [[:choice branch-options]])
+     (krro/define-minor-mode
+       :krro.undo/undo-tree
+       :name "Undo Tree Mode"
+       :keymap
+       {:u :krro.undo/undo
+        :r :krro.undo/redo
+        }))})
