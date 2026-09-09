@@ -2,13 +2,14 @@
 (ns top.kzre.krro.plugin.undo.core
   "Undo 插件注册入口，集成 hook 通知。"
   (:require
-    [top.kzre.krro.core.core :as krro ]
-    [top.kzre.krro.core.hook :as hook]
-    [top.kzre.krro.core.project :as proj]
-    [top.kzre.krro.core.resource :as res]
-    [top.kzre.krro.plugin.undo.internal.impl :as impl]
-    [top.kzre.krro.plugin.undo.internal.project :as undo-proj]
-    [top.kzre.krro.plugin.undo.protocol :as proto]))
+   [top.kzre.krro.core.core :as krro ]
+   [top.kzre.krro.core.hook :as hook]
+   [top.kzre.krro.core.project :as proj]
+   [top.kzre.krro.core.resource :as res]
+   [top.kzre.krro.plugin.undo.internal.impl :as impl]
+   [top.kzre.krro.plugin.undo.internal.project :as undo-proj]
+   [top.kzre.krro.plugin.undo.plugin :as undo-cmd]
+   [top.kzre.krro.plugin.undo.protocol :as proto]))
 
 ;; 手动操作api
 
@@ -21,6 +22,11 @@
                               (impl/make-undo-tree (res/encode (proj/user-data project))))]
               (assoc project :krro.undo/undo-tree
                              (proto/add-state! current (res/encode (proj/user-data project)) metadata)))))))
+
+(defn record-undo-command!
+  [type metadata]
+  (record-state! (undo-cmd/make-metadata type metadata)))
+
 
 (defn- record-state-handler [_project]
   (record-state!))
@@ -111,4 +117,9 @@
        :keymap
        {:u :krro.undo/undo
         :r :krro.undo/redo
-        }))})
+        })
+
+     ;; undo 插件安装的子插件系统
+     (undo-cmd/mount)
+     )})
+
